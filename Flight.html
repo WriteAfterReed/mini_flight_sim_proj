@@ -1,0 +1,122 @@
+<!DOCTYPE HTML> 
+<html lang="en"> 
+<head>
+<title>Flight Map</title>
+<meta charset="utf-8"> 
+</head>
+
+<p>Press up to pitch up <br> Press down to pitch down <br> Press the right and left arrows to roll <br> And press the + and - buttons to increase and decrease velocity </p>
+ 
+<script id="shader-vs" type="x-shader/x-vertex">
+precision mediump float;
+attribute vec3 aVertexNormal;
+attribute vec3 aVertexPosition;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat3 uNMatrix;
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying float height;
+
+// This is just phong shading
+void main(void){
+    
+    // Get the vertex position in eye coordinates
+    vec4 vertexPositionEye4 = uMVMatrix * vec4(aVertexPosition, 1.0);
+    vPosition = vertexPositionEye4.xyz / vertexPositionEye4.w;
+
+    height = aVertexPosition.z;
+    
+    //Calculate the normal
+    vNormal = normalize(uNMatrix * aVertexNormal);
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0); 
+}
+
+</script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+precision mediump float;
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat3 uNMatrix;
+uniform vec3 uLightPosition;
+uniform vec3 uAmbientLightColor;
+uniform vec3 uDiffuseLightColor;
+uniform vec3 uSpecularLightColor;
+uniform vec3 uKAmbient;
+uniform vec3 uKDiffuse;
+uniform vec3 uKSpecular;
+uniform float uShininess;
+uniform float fogDensity;
+
+varying vec3 vNormal;
+varying vec3 vPosition;
+
+varying float height;
+
+void main(void){
+
+    // This is Blinn-phong reflection
+
+    // Calculate the vector (l) to the light source
+    vec3 vectorToLightSource = normalize(uLightPosition - vPosition);
+
+    // The camera in eye coordinates is located in the origin and is pointing
+    // along the negative z-axis. Calculate viewVector (v) 
+    // in eye coordinates as:
+    // (0.0, 0.0, 0.0) - vNormal
+    vec3 viewVectorEye = -normalize(vPosition);
+
+    // Calculate n dot l for diffuse lighting
+    float diffuseLightWeightning = max(dot(vNormal, vectorToLightSource), 0.0);
+
+    // Calculate halfway vector (h) from n and l.
+    vec3 top = vectorToLightSource + viewVectorEye;
+    vec3 bot = normalize(top);
+    vec3 h = top/bot;
+    float ndoth = max(dot(vNormal, h), 0.0);
+
+    float specularLightWeightning = pow(ndoth, 30.0);
+
+    // This sets the colors based off height
+    vec3 diffuseColor;
+    if (height < 0.15) {diffuseColor = vec3(0.0,0.0,1.0);}
+    else if (height < 0.20){ diffuseColor = vec3(0.0,1.0,0.0);}
+    else if (height < 0.27){ diffuseColor = vec3(1.0,0.0,0.0);}
+    else if (height < 0.50){ diffuseColor = vec3(1,1,1);}
+
+    gl_FragColor = vec4(((uAmbientLightColor*uKAmbient)
+                + (diffuseColor*uKDiffuse) * diffuseLightWeightning
+                + ((uSpecularLightColor*uKSpecular) * specularLightWeightning)),1.0);
+
+    float fogCoord = (gl_FragCoord.z/gl_FragCoord.w);
+    const float LOG2 = 1.442695;
+    float fogFactor = exp2( -fogDensity * fogDensity * fogCoord * fogCoord * LOG2 ); 
+    fogFactor = clamp(fogFactor, 0.0, 1.0);    
+    vec4 fogColor = vec4(1.0, 1.0, 1.0, 1.0);
+    gl_FragColor = mix(fogColor, gl_FragColor, fogFactor);  
+
+
+    }
+</script>
+
+<script src="gl-matrix-min.js"></script> 
+<script src="webgl-utils.js"></script> 
+<script src="Terrain.js"></script>  
+<script src="HelloTerrain.js"></script>   
+<script src="DiamondSquareGen.js"></script>
+<body onload="startup();">
+ <canvas id="myGLCanvas" width="800" height="800"></canvas>
+    <form id="input_form">
+        <fieldset>
+            <legend>Rendering Parameters</legend>
+         <input type="radio" name="primitive" id="wireframe" value="wireframe"> Wireframe
+         <input type="radio" name="primitive" id="polygon" id="polygon" value="polygon" checked> Polygon
+         <input type="radio" name="primitive" id="wirepoly" value="wirepoly" > Polygon with Edges  
+         <input type="checkbox" name="primitive" id="togglefog" value="togglefog" checked> Toggle Fog  
+        </fieldset>
+    </form>
+</body>
+
+</html>
